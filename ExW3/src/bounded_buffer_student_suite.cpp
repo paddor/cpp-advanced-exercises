@@ -5,60 +5,60 @@
 
 void testValueCtorWithLargeInput() {
 	RingN<5> four{19};
-	ASSERT_EQUAL((RingN<5>{4}), four);
+	ASSERT_EQUAL(decltype(four){4}, four);
 }
 
 void testIncrement() {
 	RingN<5> two{1};
 	++two;
-	ASSERT_EQUAL((RingN<5>{2}), two);
+	ASSERT_EQUAL(decltype(two){2}, two);
 }
 
 void testIncrementOverflow() {
-	RingN<5> zero{4};
+	RingN<5, unsigned short> zero{4};
 	++zero;
-	ASSERT_EQUAL((RingN<5>{0}), zero);
+	ASSERT_EQUAL(decltype(zero){0}, zero);
 }
 
 void testDecrement() {
 	RingN<5> two{3};
 	--two;
-	ASSERT_EQUAL((RingN<5>{2}), two);
+	ASSERT_EQUAL(decltype(two){2}, two);
 }
 
 void testDecrementUnderflow() {
-	RingN<5> four{0};
-	--four;
-	ASSERT_EQUAL((RingN<5>{4}), four);
+	RingN<3, int> two{0};
+	--two;
+	ASSERT_EQUAL(decltype(two){2}, two);
 }
 
 void testMinus11Underflow() {
 	RingN<5> two{3};
 	two -= 11;
-	ASSERT_EQUAL((RingN<5>{2}), two);
+	ASSERT_EQUAL(decltype(two){2}, two);
 }
 
 void testAddOverflow() {
-	RingN<5> two{3};
+	RingN<5, ptrdiff_t> two{3};
 	two += 4;
-	ASSERT_EQUAL((RingN<5>{2}), two);
+	ASSERT_EQUAL(decltype(two){2}, two);
 }
 
 void testZeroN() {
 	RingN<0> zero{2};
-	ASSERT_EQUAL(RingN<0>{0}, zero);
+	ASSERT_EQUAL(decltype(zero){0}, zero);
 }
 
 void testZeroNIncrement() {
 	RingN<0> zero{0};
 	++zero;
-	ASSERT_EQUAL(RingN<0>{0}, zero);
+	ASSERT_EQUAL(decltype(zero){0}, zero);
 }
 
 void testZeroNDecrement() {
 	RingN<0> zero{0};
 	--zero;
-	ASSERT_EQUAL(RingN<0>{0}, zero);
+	ASSERT_EQUAL(decltype(zero){0}, zero);
 }
 
 cute::suite make_suite_bounded_buffer_student_suite() {

@@ -2,12 +2,19 @@
 #define SRC_BOUNDEDBUFFER_H_
 
 #include <boost/operators.hpp>
+
+#include <array>
+#include <utility>
 #include <stdexcept>
 
-template <size_t N>
-struct RingN : boost::equality_comparable<RingN<N>>, boost::addable<RingN<N>>, boost::subtractable<RingN<N>>, boost::incrementable<RingN<N>> {
-	RingN(size_t x = 0u) : val_{x % N} { }
-	size_t operator*() const { return val_; }
+template <size_t N, typename size_type=size_t>
+struct RingN :
+		private boost::equality_comparable<RingN<N, size_type>>,
+		private boost::addable<RingN<N, size_type>>,
+		private boost::subtractable<RingN<N, size_type>>,
+		private boost::incrementable<RingN<N, size_type>> {
+	RingN(size_type x=0ul) : val_{static_cast<size_type>(x % N)} { }
+	size_type operator*() const { return val_; }
 	bool operator==(RingN const & r) const { return val_ == r.val_; }
 	RingN operator+=(RingN const & r) {
 		val_ = (val_ + r.val_) % N;
@@ -18,40 +25,37 @@ struct RingN : boost::equality_comparable<RingN<N>>, boost::addable<RingN<N>>, b
 		val_ = (val_ - r.val_) % N;
 		return *this;
 	}
-	friend auto operator++(RingN<N> & r) {
-		return r += 1;
-	}
-	friend auto operator--(RingN<N> & r) {
-		return r -= 1;
-	}
+	friend RingN operator++(RingN & r) { return r += 1; }
+	friend RingN operator--(RingN & r) { return r -= 1; }
 private:
-	size_t val_;
+	size_type val_;
 };
 
-template <>
-struct RingN<0> : boost::equality_comparable<RingN<0>>, boost::addable<RingN<0>>, boost::subtractable<RingN<0>>, boost::incrementable<RingN<0>> {
-	RingN(size_t x = 0u) : val_{0} { }
-	size_t operator*() const { return val_; }
-	bool operator==(RingN const & r) const { return val_ == r.val_; }
+template <typename size_type>
+struct RingN<0, size_type> :
+		private boost::equality_comparable<RingN<0, size_type>>,
+		private boost::addable<RingN<0, size_type>>,
+		private boost::subtractable<RingN<0, size_type>>,
+		private boost::incrementable<RingN<0, size_type>> {
+	RingN(size_type x = 0ul) { }
+	size_type operator*() const { return 0; }
+	bool operator==(RingN const & r) const { return 0 == *r; }
 	RingN operator+=(RingN const & r) { return *this; }
 	RingN operator-=(RingN const & r) { return *this; }
-	friend auto operator++(RingN & r) { return r; }
-	friend auto operator--(RingN & r) { return r; }
+	friend RingN operator++(RingN & r) { return r; }
+	friend RingN operator--(RingN & r) { return r; }
 private:
-	size_t val_;
 };
 
 
 template <typename T, size_t N>
 struct BoundedBuffer {
-	using Container = std::array<T, N>;
-	using container_type = Container;
-	using value_type = typename Container::value_type;
-	using reference = typename Container::reference;
-	using const_reference = typename Container::const_reference;
-	using size_type = typename Container::size_type;
-
-	using index_type = RingN<N>;
+	using container_type = std::array<T, N>;
+	using value_type = typename container_type::value_type;
+	using reference = typename container_type::reference;
+	using const_reference = typename container_type::const_reference;
+	using size_type = typename container_type::size_type;
+	using index_type = RingN<N, size_type>;
 
 	BoundedBuffer() = default;
 	BoundedBuffer(BoundedBuffer const & other) :
@@ -61,76 +65,79 @@ struct BoundedBuffer {
 		container{std::move(other.container)}, index{std::move(other.index)}, count{std::move(other.count)} { }
 
 	BoundedBuffer & operator=(BoundedBuffer const & other) {
-		container = other.container;
-		index = other.index;
-		count = other.count;
+		copyElements(other);
 		return *this;
 	}
 
 	BoundedBuffer & operator=(BoundedBuffer && other) {
-		container = std::move(other.container);
-		index = std::move(other.index);
-		count = std::move(other.count);
+		copyElements(std::move(other));
 		return *this;
 	}
 
+	template <typename TOther>
+	void copyElements(TOther && other) {
+		container = std::move(other.container);
+		index = std::move(other.index);
+		count = std::move(other.count);
+	}
+
 	bool empty() const noexcept { return count == 0; }
-	bool full() const noexcept { return count >= N; }
-	size_t size() const noexcept { return count; }
+	bool full() const noexcept { return count == N; }
+	size_type size() const noexcept { return count; }
 
 	reference front() {
-		check_empty();
+		throwIfEmpty();
 		return _at(index);
 	}
 	const_reference front() const {
-		check_empty();
+		throwIfEmpty();
 		return _at(index);
 	}
 
 	reference back() {
-		check_empty();
-		return _at(index + count - 1);
+		throwIfEmpty();
+		return _at(lastIndex());
 	}
 	const_reference back() const {
-		check_empty();
-		return _at(index + count - 1);
+		throwIfEmpty();
+		return _at(lastIndex());
 	}
 
 	void push(T const & ele) {
-		check_full();
-		_at(index + count++) = ele;
+		throwIfFull();
+		_at(addToIndex()) = ele;
 	}
 	void push(T && ele) {
-		check_full();
-		_at(index + count++) = std::move(ele);
+		throwIfFull();
+		_at(addToIndex()) = std::move(ele);
 	}
 
 	void pop() {
-		check_empty();
+		throwIfEmpty();
 		--count;
 		++index;
 	}
 	void swap(BoundedBuffer & b) {
 		if (!(empty() && b.empty())) {
-			std::swap(container, b.container);
-			std::swap(index, b.index);
-			std::swap(count, b.count);
+			using std::swap;
+			swap(container, b.container);
+			swap(index, b.index);
+			swap(count, b.count);
 		}
 	}
 private:
-	Container container{};
+	container_type container{};
 	index_type index{0};
-	size_t count{0};
+	size_type count{0};
 
-	reference _at(index_type i) { return container.at(*i); }
-	const_reference _at(index_type i) const { return container.at(*i); }
+	reference _at(index_type const & i) { return container.at(*i); }
+	const_reference _at(index_type const & i) const { return container.at(*i); }
 
-	reference _at(size_t i) { return _at(index_type{i}); }
-	const_reference _at(size_t i) const { return _at(index_type{i}); }
+	void throwIfEmpty() const { if (empty()) throw std::logic_error{"empty container"}; }
+	void throwIfFull() const { if (full()) throw std::logic_error{"full container"}; }
 
-	void check_empty() const { if (empty()) throw std::logic_error{"empty container"}; }
-	void check_full() const { if (full()) throw std::logic_error{"full container"}; }
-
+	index_type lastIndex() const noexcept { return index + count - 1; }
+	index_type addToIndex() noexcept { return index + count++; }
 };
 
 #endif /* SRC_BOUNDEDBUFFER_H_ */
