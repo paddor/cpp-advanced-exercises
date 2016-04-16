@@ -65,20 +65,17 @@ struct BoundedBuffer {
 		container{std::move(other.container)}, index{std::move(other.index)}, count{std::move(other.count)} { }
 
 	BoundedBuffer & operator=(BoundedBuffer const & other) {
-		copyElements(other);
+		container = other.container;
+		index = other.index;
+		count = other.count;
 		return *this;
 	}
 
 	BoundedBuffer & operator=(BoundedBuffer && other) {
-		copyElements(std::move(other));
-		return *this;
-	}
-
-	template <typename TOther>
-	void copyElements(TOther && other) {
 		container = std::move(other.container);
 		index = std::move(other.index);
 		count = std::move(other.count);
+		return *this;
 	}
 
 	bool empty() const noexcept { return count == 0; }
@@ -124,6 +121,31 @@ struct BoundedBuffer {
 			swap(index, b.index);
 			swap(count, b.count);
 		}
+	}
+
+	template<typename FIRST, typename... REST>
+	void push_many(FIRST && first, REST && ...rest) {
+		push(std::forward<FIRST>(first));
+		push_many(std::forward<decltype(rest)>(rest)...);
+	}
+
+	template<typename FIRST>
+	void push_many(FIRST && first) {
+		push(std::forward<FIRST>(first));
+	}
+
+	template<typename Tm>
+	static BoundedBuffer<T, N> make_buffer(Tm && ele) {
+		BoundedBuffer<T, N> buffer{};
+		buffer.push(std::forward<Tm>(ele));
+		return buffer;
+	}
+
+	template<typename... ELES>
+	static BoundedBuffer<T, N> make_buffer(ELES && ...eles) {
+		BoundedBuffer<T, N> buffer{};
+		buffer.push_many(std::forward<decltype(eles)>(eles)...);
+		return buffer;
 	}
 private:
 	container_type container{};
