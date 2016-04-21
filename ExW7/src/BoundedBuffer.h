@@ -17,39 +17,45 @@ struct BoundedBuffer {
 	using reference = value_type &;
 	using const_reference = value_type const &;
 	using size_type = size_t;
-	using index_type = size_t;
 
 	BoundedBuffer(size_type n) : n_{n} {
 		if (n <= 0) throw std::invalid_argument{"n must be > 0"};
 		container_ = new T[n_];
 	}
 	BoundedBuffer(BoundedBuffer const & other) :
-		index_{0}, cnt_{0}, n_{other.n_}, container_{new T[other.n_]} {
-			for (size_t i{0}; i < other.cnt_; ++i) push(other._at(i));
+		index_{other.index_}, cnt_{other.cnt_}, n_{other.n_}, container_{new T[other.n_]} {
+			copyFromBufferToArray(other, container_);
 	}
 
 	BoundedBuffer(BoundedBuffer && other) :
 		index_{std::move(other.index_)}, cnt_{std::move(other.cnt_)}, n_{std::move(other.n_)}, container_{std::move(other.container_)} {
 			other.container_ = nullptr;
-		}
+	}
 
 	BoundedBuffer & operator=(BoundedBuffer const & other) {
 		if (&other == this) return *this;
-		index_ = 0;
-		cnt_ = 0;
+
+		index_ = other.index_;
+		cnt_ = other.cnt_;
 		n_ = other.n_;
-		delete[] container_;
-		container_ = new T[n_];
-		for (size_t i{0}; i < other.cnt_; ++i) push(other._at(i));
+
+		container_type tmp = new T[n_];
+		copyFromBufferToArray(other, tmp);
+		std::swap(container_, tmp);
+		delete[] tmp;
+
 		return *this;
 	}
 
 	BoundedBuffer & operator=(BoundedBuffer && other) {
 		if (&other == this) return *this;
+
 		index_ = other.index_;
 		cnt_ = other.cnt_;
 		n_ = other.n_;
+
 		std::swap(container_, other.container_);
+
 		return *this;
 	}
 
@@ -112,35 +118,27 @@ struct BoundedBuffer {
 	void push_many(FIRST && first) {
 		push(std::forward<FIRST>(first));
 	}
-/*
-	template<typename Tm>
-	static BoundedBuffer<T, n> make_buffer(Tm && ele) {
-		BoundedBuffer<T, n> buffer{};
-		buffer.push(std::forward<Tm>(ele));
-		return buffer;
-	}
-
-	template<typename... ELES>
-	static BoundedBuffer<T, n> make_buffer(ELES && ...eles) {
-		BoundedBuffer<T, n> buffer{};
-		buffer.push_many(std::forward<decltype(eles)>(eles)...);
-		return buffer;
-	}
-	*/
 private:
-	index_type index_{0};
+	size_type index_{0};
 	size_type cnt_{0};
 	size_type n_{0};
 	container_type container_;
 
-	reference _at(index_type const & i) { return container_[i % n_]; }
-	const_reference _at(index_type const & i) const { return container_[i % n_]; }
+	reference _at(size_type const i) { return container_[calcMod(i)]; }
+	const_reference _at(size_type const i) const { return container_[calcMod(i)]; }
 
 	void throwIfEmpty() const { if (empty()) throw std::logic_error{"empty container"}; }
 	void throwIfFull() const { if (full()) throw std::logic_error{"full container"}; }
 
-	index_type lastIndex() const noexcept { return index_ + cnt_ - 1; }
-	index_type addToIndex() noexcept { return index_ + cnt_++; }
+	void copyFromBufferToArray(BoundedBuffer const & from, container_type to) {
+		for (size_t i{0}; i < from.cnt_; ++i) {
+			auto const pos = calcMod(from.index_ + i);
+			to[pos] = from.container_[pos];
+		}
+	}
+	size_type calcMod(size_type const & i) const noexcept { return i % n_; }
+	size_type lastIndex() const noexcept { return index_ + cnt_ - 1; }
+	size_type addToIndex() noexcept { return index_ + cnt_++; }
 };
 
 #endif /* SRC_BOUNDEDBUFFER_H_ */
