@@ -15,7 +15,7 @@ template <typename T>
 struct BoundedBuffer {
 	template<typename Container, typename Ref> struct BBIterator;
 
-	using container_type = T*;
+	using memory_type = std::unique_ptr<char[]>;
 	using value_type = T;
 	using reference = value_type &;
 	using const_reference = value_type const &;
@@ -23,48 +23,42 @@ struct BoundedBuffer {
 	using iterator = BBIterator<BoundedBuffer, reference>;
 	using const_iterator = BBIterator<const BoundedBuffer, const_reference>;
 
-	BoundedBuffer(size_type n) : n_{n} {
+	BoundedBuffer(size_type n) : n_ { n }, container_ {newMemory()} {
 		if (n <= 0) throw std::invalid_argument{"n must be > 0"};
-		container_ = new T[n_];
 	}
 	BoundedBuffer(BoundedBuffer const & rhs) :
-		index_{rhs.index_}, cnt_{rhs.cnt_}, n_{rhs.n_}, container_{new T[rhs.n_]} {
-			copyFromBufferToArray(rhs, container_);
+		index_{rhs.index_}, cnt_{rhs.cnt_}, n_{rhs.n_}, container_{newMemory()} {
+			copyFromBufferToArray(rhs, elements());
 	}
 
 	BoundedBuffer(BoundedBuffer && rhs) :
 		index_{std::move(rhs.index_)}, cnt_{std::move(rhs.cnt_)}, n_{std::move(rhs.n_)}, container_{std::move(rhs.container_)} {
+			rhs.index_ = 0;
+			rhs.cnt_ = 0;
+			rhs.n_ = 0;
 			rhs.container_ = nullptr;
 	}
 
 	BoundedBuffer & operator=(BoundedBuffer const & rhs) {
 		if (&rhs == this) return *this;
 
-		index_ = rhs.index_;
-		cnt_ = rhs.cnt_;
-		n_ = rhs.n_;
-
-		container_type tmp = new T[n_];
-		copyFromBufferToArray(rhs, tmp);
+		memory_type tmp{rhs.newMemory()};
+		copyFromBufferToArray(rhs, elements(tmp));
 		std::swap(container_, tmp);
-		delete[] tmp;
 
+		copyTrivialMembers(rhs);
 		return *this;
 	}
 
 	BoundedBuffer & operator=(BoundedBuffer && rhs) {
 		if (&rhs == this) return *this;
 
-		index_ = rhs.index_;
-		cnt_ = rhs.cnt_;
-		n_ = rhs.n_;
-
 		std::swap(container_, rhs.container_);
-
+		copyTrivialMembers(rhs);
 		return *this;
 	}
 
-	~BoundedBuffer() { delete[] container_; }
+	~BoundedBuffer() { clear(); }
 
 	bool empty() const noexcept { return cnt_ == 0; }
 	bool full() const noexcept { return cnt_ == n_; }
@@ -82,24 +76,27 @@ struct BoundedBuffer {
 
 	reference back() {
 		throwIfEmpty();
-		return at(lastIndex());
+		return at(backIndexOffset());
 	}
 	const_reference back() const {
 		throwIfEmpty();
-		return at(lastIndex());
+		return at(backIndexOffset());
 	}
 
 	void push(T const & ele) {
 		throwIfFull();
-		at(addToIndex()) = ele;
+		::new(elements() + positionToAdd()) T{ele};
+		++cnt_;
 	}
 	void push(T && ele) {
 		throwIfFull();
-		at(addToIndex()) = std::move(ele);
+		::new(elements() + positionToAdd()) T{std::move(ele)};
+		++cnt_;
 	}
 
 	void pop() {
 		throwIfEmpty();
+		front().~T();
 		--cnt_;
 		++index_;
 	}
@@ -134,30 +131,36 @@ struct BoundedBuffer {
 		push(std::forward<FIRST>(first));
 	}
 
-	reference at(size_type const i) { return container_[calcMod(index_ + i)]; }
-	const_reference at(size_type const i) const { return container_[calcMod(index_ + i)]; }
+	reference at(size_type const i) { return elements()[calcMod(index_ + i)]; }
+	const_reference at(size_type const i) const { return elements()[calcMod(index_ + i)]; }
+	void clear() { while(!empty()) pop(); }
 private:
 	size_type index_{0};
 	size_type cnt_{0};
 	size_type n_{0};
-	container_type container_;
+	memory_type container_;
 
 
 	void throwIfEmpty() const { if (empty()) throw std::logic_error{"empty container"}; }
 	void throwIfFull() const { if (full()) throw std::logic_error{"full container"}; }
 
-	void copyFromBufferToArray(BoundedBuffer const & from, container_type to) {
+	void copyFromBufferToArray(BoundedBuffer const& from, T* to) {
 		for (size_t i{0}; i < from.cnt_; ++i) {
 			auto const pos = calcMod(from.index_ + i);
-			to[pos] = from.container_[pos];
+			to[pos] = from.elements()[pos];
 		}
 	}
-//	bool inRange(size_type i) const noexcept { return i > index_ && i < index_ + cnt_; }
 	size_type calcMod(size_type const & i) const noexcept { return i % n_; }
-	size_type lastIndex() const noexcept { return cnt_ - 1; }
-	size_type addToIndex() noexcept { return cnt_++; }
-
-
+	size_type backIndexOffset() const noexcept { return cnt_ - 1; }
+	size_type positionToAdd() noexcept { return calcMod(index_ + cnt_); }
+	char * newMemory() const { return new char[sizeof(T) * n_]; }
+	T* elements() const { return elements(container_); }
+	T* elements(memory_type const & container) const { return reinterpret_cast<T*>(container.get()); }
+	void copyTrivialMembers(BoundedBuffer const & rhs) {
+		index_ = rhs.index_;
+		cnt_ = rhs.cnt_;
+		n_ = rhs.n_;
+	}
 public:
 	template<typename Container, typename Ref>
 	struct BBIterator : public boost::random_access_iterator_helper<BBIterator<Container, Ref>, T> {

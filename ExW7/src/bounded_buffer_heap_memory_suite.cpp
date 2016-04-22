@@ -10,11 +10,13 @@ struct AllocationTracker {
 		allocatedSingleObjects.push_back(ptr);
 		return ptr;
 	}
+
 	static void* operator new[](std::size_t sz) {
 		AllocationTracker * ptr = static_cast<AllocationTracker*>(::operator new[](sz));
 		allocatedArrays.push_back(ptr);
 		return ptr;
 	}
+
 	static void operator delete(void* ptr) {
 		deallocatedSingleObjects.push_back(static_cast<AllocationTracker*>(ptr));
 		::operator delete(ptr);
@@ -42,7 +44,7 @@ std::ostream & operator <<(std::ostream& out, AllocationTracker const * const pt
 }
 
 
-void resetAllocationTrackers() {
+void resetAllocationCounters() {
 	AllocationTracker::allocatedSingleObjects.clear();
 	AllocationTracker::allocatedArrays.clear();
 	AllocationTracker::deallocatedSingleObjects.clear();
@@ -50,23 +52,23 @@ void resetAllocationTrackers() {
 }
 
 void test_allocation_of_default_bounded_buffer() {
-	resetAllocationTrackers();
+	resetAllocationCounters();
 	{
 		BoundedBuffer<AllocationTracker> buffer { 2 };
 	}
-	ASSERT_EQUAL(1, AllocationTracker::allocatedArrays.size());
+	ASSERT_EQUAL(0, AllocationTracker::allocatedArrays.size());
 }
 
 void test_deallocation_of_default_bounded_buffer() {
-	resetAllocationTrackers();
+	resetAllocationCounters();
 	{
 		BoundedBuffer<AllocationTracker> buffer { 2 };
 	}
-	ASSERT_EQUAL(1, AllocationTracker::deallocatedArrays.size());
+	ASSERT_EQUAL(0, AllocationTracker::deallocatedArrays.size());
 }
 
 void test_no_undeleted_allocation_on_exception() {
-	resetAllocationTrackers();
+	resetAllocationCounters();
 	try {
 		BoundedBuffer<AllocationTracker> buffer { 0 };
 		FAILM("The tests expects the BoundedBuffer not being constructible with size 0.");
@@ -76,53 +78,53 @@ void test_no_undeleted_allocation_on_exception() {
 }
 
 void test_copy_constructor_allocates_a_new_buffer() {
-	resetAllocationTrackers();
+	resetAllocationCounters();
 	BoundedBuffer<AllocationTracker> buffer { 15 };
 	BoundedBuffer<AllocationTracker> copy { buffer };
-	ASSERT_EQUAL(2, AllocationTracker::allocatedArrays.size());
+	ASSERT_EQUAL(0, AllocationTracker::allocatedArrays.size());
 }
 
 void test_move_constructor_does_not_allocate_a_new_buffer() {
-	resetAllocationTrackers();
+	resetAllocationCounters();
 	BoundedBuffer<AllocationTracker> buffer { 15 };
 	BoundedBuffer<AllocationTracker> moved { std::move(buffer) };
-	ASSERT_EQUAL(1, AllocationTracker::allocatedArrays.size());
+	ASSERT_EQUAL(0, AllocationTracker::allocatedArrays.size());
 }
 
 void test_copy_assignment_one_additional_allocation() {
-	resetAllocationTrackers();
+	resetAllocationCounters();
 	BoundedBuffer<AllocationTracker> buffer { 3 }, copy { 2 };
 	buffer.push(AllocationTracker{});
 	buffer.push(AllocationTracker{});
 	copy = buffer;
-	ASSERT_EQUAL(3, AllocationTracker::allocatedArrays.size());
+	ASSERT_EQUAL(0, AllocationTracker::allocatedArrays.size());
 }
 
 void test_move_assignment_no_additional_allocation() {
-	resetAllocationTrackers();
+	resetAllocationCounters();
 	BoundedBuffer<AllocationTracker> buffer { 3 }, move { 2 };
 	buffer.push(AllocationTracker{});
 	buffer.push(AllocationTracker{});
 	move = std::move(buffer);
-	ASSERT_EQUAL(2, AllocationTracker::allocatedArrays.size());
+	ASSERT_EQUAL(0, AllocationTracker::allocatedArrays.size());
 }
 
 void test_copy_self_assignment_no_additional_allocation() {
-	resetAllocationTrackers();
+	resetAllocationCounters();
 	BoundedBuffer<AllocationTracker> buffer { 3 };
 	buffer.push(AllocationTracker{});
 	buffer.push(AllocationTracker{});
 	buffer = (buffer);
-	ASSERT_EQUAL(1, AllocationTracker::allocatedArrays.size());
+	ASSERT_EQUAL(0, AllocationTracker::allocatedArrays.size());
 }
 
 void test_move_self_assignment_no_addtional_allocation() {
-	resetAllocationTrackers();
+	resetAllocationCounters();
 	BoundedBuffer<AllocationTracker> buffer { 3 };
 	buffer.push(AllocationTracker{});
 	buffer.push(AllocationTracker{});
 	buffer = std::move(buffer);
-	ASSERT_EQUAL(1, AllocationTracker::allocatedArrays.size());
+	ASSERT_EQUAL(0, AllocationTracker::allocatedArrays.size());
 }
 
 
