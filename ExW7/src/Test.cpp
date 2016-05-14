@@ -23,7 +23,7 @@ void runAllTests(int argc, char const *argv[]) {
 	cute::makeRunner(lis,argc,argv)(make_suite_bounded_buffer_semantic_suite(), "BoundedBuffer Semantic Tests");
 	cute::makeRunner(lis,argc,argv)(make_suite_bounded_buffer_student_suite(), "BoundedBuffer Student Tests");
 	cute::makeRunner(lis,argc,argv)(make_suite_bounded_buffer_heap_memory_suite(), "BoundedBuffer Heap Memory Tests");
-	//cute::makeRunner(lis,argc,argv)(make_suite_bounded_buffer_make_buffer_suite(), "BoundedBuffer make function Tests");
+	cute::makeRunner(lis,argc,argv)(make_suite_bounded_buffer_make_buffer_suite(), "BoundedBuffer make function Tests");
 	cute::makeRunner(lis,argc,argv)(make_suite_bounded_buffer_iterator_suite(), "BoundedBuffer Iterator Tests");
 	cute::makeRunner(lis,argc,argv)(make_suite_bounded_buffer_non_default_constructible_element_type_suite(), "BoundedBuffer Non Default Constructable Tests");
 }
